@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Kết quả tìm kiếm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+    <style>
+        :root{
+            --bg:#020617;
+            --border:rgba(255,255,255,.06);
+            --text:#f8fafc;
+        }
+        body{
+            background: radial-gradient(circle at top left, rgba(99,102,241,.12), transparent 30%), var(--bg);
+            color:var(--text);
+            font-family:Inter, sans-serif;
+        }
+        .glass{
+            background:rgba(15,23,42,.72);
+            border:1px solid var(--border);
+            backdrop-filter:blur(12px);
+        }
+        .loader-spin{ animation:spin 1s linear infinite; }
+        @keyframes spin{ from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
+        select option { background-color: #0f172a; color: #f8fafc; }
+    </style>
+</head>
+
+<body class="min-h-screen p-4 lg:p-8">
+
+    <div class="max-w-[1200px] mx-auto">
+        
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 glass p-6 rounded-3xl">
+            <div>
+                <a href="/" class="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 transition mb-3 text-sm font-medium">
+                    <i class="fa-solid fa-arrow-left"></i> Quay lại Dashboard
+                </a>
+                <h1 class="text-3xl font-semibold">Kết quả tìm kiếm</h1>
+                <p class="text-slate-400 mt-1">
+                    Đang hiển thị bài báo chứa từ khóa: <span id="displayQuery" class="text-white font-bold text-lg"></span>
+                </p>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <span class="text-sm text-slate-400">Mốc thời gian:</span>
+                <select id="timeFilter" onchange="performSearch()" class="h-11 px-4 rounded-xl bg-slate-900/80 border border-white/5 outline-none focus:border-indigo-500 text-sm transition cursor-pointer">
+                    <option value="all">Tất cả thời gian</option>
+                    <option value="24h">24 giờ qua</option>
+                    <option value="48h">48 giờ qua</option>
+                    <option value="7d">7 ngày qua</option>
+                </select>
+            </div>
+        </header>
+
+        <div id="articlesContainer" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            </div>
+
+    </div>
+
+    <script>
+        // Lấy từ khóa từ thanh địa chỉ URL (VD: /search/?q=đại học)
+        const urlParams = new URLSearchParams(window.location.search);
+        const query = urlParams.get('q') || '';
+        
+        document.getElementById('displayQuery').innerText = `"${query}"`;
+
+        async function performSearch() {
+            const container = document.getElementById('articlesContainer');
+            const timeFilter = document.getElementById('timeFilter').value;
+
+            if (!query) {
+                container.innerHTML = `<div class="col-span-full text-center text-slate-500 py-10">Vui lòng nhập từ khóa.</div>`;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="col-span-full flex justify-center py-20">
+                    <div class="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full loader-spin"></div>
+                </div>`;
+
+            try {
+                // Gọi API để lấy bài báo
+                const response = await fetch(`/api/search/?q=${encodeURIComponent(query)}&time=${timeFilter}`);
+                const data = await response.json();
+
+                container.innerHTML = '';
+
+                if (data.length === 0) {
+                    container.innerHTML = `
+                        <div class="col-span-full text-center text-slate-500 py-20 glass rounded-3xl">
+                            <i class="fa-solid fa-box-open text-4xl mb-3 opacity-50"></i>
+                            <p>Không tìm thấy bài báo nào trong mốc thời gian này.</p>
+                        </div>`;
+                    return;
+                }
+
+                data.forEach(article => {
+                    const card = document.createElement('div');
+                    card.className = "glass rounded-2xl p-5 border border-white/5 hover:border-indigo-500/30 transition duration-300 flex flex-col";
+                    card.innerHTML = `
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/10">
+                                ${article.category || 'Tin tức'}
+                            </span>
+                            <span class="text-xs text-slate-500"><i class="fa-regular fa-clock mr-1"></i> ${article.published_at}</span>
+                        </div>
+                        <h3 class="text-lg font-semibold leading-snug mb-3">
+                            ${article.title}
+                        </h3>
+                        <p class="text-sm text-slate-400 mt-auto">Nguồn: ${article.source}</p>
+                        <div class="mt-4 pt-4 border-t border-white/5">
+                            <a href="${article.url}" target="_blank" class="inline-flex items-center gap-2 text-indigo-400 hover:text-indigo-300 text-sm font-medium">
+                                Đọc bài viết <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+                            </a>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+
+            } catch (error) {
+                console.error("Lỗi:", error);
+                container.innerHTML = `<div class="col-span-full text-center text-red-400 py-10">Lỗi khi tải dữ liệu!</div>`;
+            }
+        }
+
+        // Khởi chạy tìm kiếm ngay khi mở trang
+        performSearch();
+    </script>
+</body>
+</html>

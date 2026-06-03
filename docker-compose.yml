@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. DATABASE (POSTGRESQL)
+  # ==========================================
+  db:
+    image: postgres:15-alpine
+    container_name: pbl7_database_v2
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: postgres
+    ports:
+      - "5434:5432" # Ánh xạ cổng ra ngoài cho host
+    volumes:
+      - ./postgres_docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - pbl7_pgdata:/var/lib/postgresql/data
+
+  # ==========================================
+  # 2. APACHE SPARK (MASTER)
+  # ==========================================
+  spark-master:
+    build: 
+      context: ./Spark
+    container_name: pbl7_spark_master   # 🟢 1. Đổi tên Container mới
+    hostname: pbl7_spark_master         # 🟢 2. Đổi Hostname mới
+    command: >
+      /opt/spark/bin/spark-class
+      org.apache.spark.deploy.master.Master
+      --host pbl7_spark_master          # 🟢 3. Cập nhật Hostname vào lệnh khởi động
+      --port 7077
+      --webui-port 8080
+    ports:
+      - "8082:8080"                     # 🟢 4. Đổi cổng WebUI thành 8082 tránh đụng độ
+      - "7078:7077"                     # 🟢 5. Đổi cổng Master thành 7078
+    volumes:
+      - ./Spark/app:/app
+    depends_on:
+      - db
+
+  # ==========================================
+  # 3. APACHE SPARK (WORKER)
+  # ==========================================
+  spark-worker:
+    build: 
+      context: ./Spark
+    container_name: pbl7_spark_worker   # 🟢 6. Đổi tên Container Worker mới
+    hostname: pbl7_spark_worker
+    depends_on:
+      - spark-master
+    command: >
+      /opt/spark/bin/spark-class
+      org.apache.spark.deploy.worker.Worker
+      spark://pbl7_spark_master:7077    # 🟢 7. CỰC KỲ QUAN TRỌNG: Trỏ Worker về đúng tên Master mới!
+      --cores 2
+      --memory 2G
+      --webui-port 8081
+    ports:
+      - "8083:8081"                     # 🟢 8. Đổi cổng Worker WebUI thành 8083
+    volumes:
+      - ./Spark/app:/app
+
+  # ==========================================
+  # 4. WEB APP (DJANGO)
+  # ==========================================
+  web:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: pbl7_django
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app # Đồng bộ code thật vào Docker, sửa code ngoài là web cập nhật
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment: # Truyền biến môi trường cho Django biết đường tìm Database
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=123456
+      - DB_NAME=postgres
+
+volumes:
+  pbl7_pgdata:
