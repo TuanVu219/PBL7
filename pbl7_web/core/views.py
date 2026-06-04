@@ -23,7 +23,12 @@ def get_trending(request):
     # Nhận bộ lọc từ Frontend (chuyển về chữ thường để dễ so sánh)
     lda_filter = request.GET.get('category', 'all').lower() 
     
-    EXCLUDED_KEYWORDS = ['vnexpress', 'thanh_nien', 'video', 'news','tv360','thành_đông','data','độc_quyền','tứcca_sĩ','công_an_tỉnh','văn_hóa_thể_thao','triệu_đồng','triệu_lượt','thủ_tục_hành_chính','năm_2026','năm_2025','sức_khỏe','nam_bộ']
+    EXCLUDED_KEYWORDS = ['vnexpress', 'thanh_nien', 'video', 'news','tv360','thành_đông','data','độc_quyền','tứcca_sĩ',
+                        'công_an_tỉnh','văn_hóa_thể_thao','triệu_đồng','triệu_lượt','thủ_tục_hành_chính','năm_2026','năm_2025',
+                        'sức_khỏe','nam_bộ','tháng_5','tháng_6','giờ_việt_nam','miền_bắc',
+                        'công_thương','khánh_hòa','ninh_bình ','hải_phòng','nghệ_an','bắc_ninh','cần_thơ','thanh_hóa','tây_ninh','năm_2030','quảng_ngãi','quảng_trị','ninh_bình','hóa_chất_6','diễn_đàn_kinh_tế_quốc_tế_st','vinh_danh_top',
+                        'tiếng_anh','môn_toán','and_the_beast','đắk_lắk','đồng_tháp'
+                        ]
     
     try:
         latest_stat = NerKeywordDailyStats.objects.aggregate(Max('date'))
@@ -36,14 +41,14 @@ def get_trending(request):
 
         # 🟢 Lấy dư dả từ khóa (khoảng 150) để trừ hao lúc áp dụng bộ lọc LDA
         if time_filter == '24h':
-            trending_qs = TrendingKeywords.objects.filter(date=latest_date).exclude(keyword__in=EXCLUDED_KEYWORDS).order_by('-super_hot_score')[:150]
+            trending_qs = TrendingKeywords.objects.filter(date=latest_date).exclude(keyword__in=EXCLUDED_KEYWORDS).order_by('-super_hot_score')[:300]
             if not trending_qs.exists():
-                trending_qs = TrendingKeywords.objects.exclude(keyword__in=EXCLUDED_KEYWORDS).order_by('-super_hot_score')[:150]
+                trending_qs = TrendingKeywords.objects.exclude(keyword__in=EXCLUDED_KEYWORDS).order_by('-super_hot_score')[:300]
             
             keywords_list = [{'keyword': item.keyword, 'z_score': float(item.z_score or 0), 'super_hot_score': float(item.super_hot_score or 0), 'popularity': float(item.popularity or 0), 'trend': float(item.trend or 0)} for item in trending_qs]
         else:
             target_date_str = (latest_date - timedelta(days=1)).strftime('%Y-%m-%d')
-            trending_qs = NerKeywordDailyStats.objects.filter(date__gte=target_date_str).exclude(keyword__in=EXCLUDED_KEYWORDS).values('keyword').annotate(total_pop=Sum('count')).order_by('-total_pop')[:150]
+            trending_qs = NerKeywordDailyStats.objects.filter(date__gte=target_date_str).exclude(keyword__in=EXCLUDED_KEYWORDS).values('keyword').annotate(total_pop=Sum('count')).order_by('-total_pop')[:300]
             keywords_list = [{'keyword': item['keyword'], 'z_score': 0.0, 'super_hot_score': float(item['total_pop']), 'popularity': float(item['total_pop']), 'trend': 0.0} for item in trending_qs]
 
         seven_days_ago = latest_date - timedelta(days=7)

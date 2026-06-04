@@ -24,17 +24,20 @@ services:
   spark-master:
     build: 
       context: ./Spark
-    container_name: pbl7_spark_master   # 🟢 1. Đổi tên Container mới
-    hostname: pbl7_spark_master         # 🟢 2. Đổi Hostname mới
-    command: >
-      /opt/spark/bin/spark-class
-      org.apache.spark.deploy.master.Master
-      --host pbl7_spark_master          # 🟢 3. Cập nhật Hostname vào lệnh khởi động
-      --port 7077
-      --webui-port 8080
+    container_name: pbl7-spark-master
+    hostname: pbl7-spark-master
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - pbl7-spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8080"
     ports:
-      - "8082:8080"                     # 🟢 4. Đổi cổng WebUI thành 8082 tránh đụng độ
-      - "7078:7077"                     # 🟢 5. Đổi cổng Master thành 7078
+      - "8082:8080"
+      - "7078:7077"
     volumes:
       - ./Spark/app:/app
     depends_on:
@@ -46,19 +49,22 @@ services:
   spark-worker:
     build: 
       context: ./Spark
-    container_name: pbl7_spark_worker   # 🟢 6. Đổi tên Container Worker mới
-    hostname: pbl7_spark_worker
+    container_name: pbl7-spark-worker
+    hostname: pbl7-spark-worker
     depends_on:
       - spark-master
-    command: >
-      /opt/spark/bin/spark-class
-      org.apache.spark.deploy.worker.Worker
-      spark://pbl7_spark_master:7077    # 🟢 7. CỰC KỲ QUAN TRỌNG: Trỏ Worker về đúng tên Master mới!
-      --cores 2
-      --memory 2G
-      --webui-port 8081
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://pbl7-spark-master:7077
+      - --cores
+      - "2"
+      - --memory
+      - 2G
+      - --webui-port
+      - "8081"
     ports:
-      - "8083:8081"                     # 🟢 8. Đổi cổng Worker WebUI thành 8083
+      - "8083:8081"
     volumes:
       - ./Spark/app:/app
 
@@ -70,14 +76,15 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: pbl7_django
+    working_dir: /app/pbl7_web
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
-      - .:/app # Đồng bộ code thật vào Docker, sửa code ngoài là web cập nhật
+      - .:/app
     ports:
       - "8000:8000"
     depends_on:
       - db
-    environment: # Truyền biến môi trường cho Django biết đường tìm Database
+    environment:
       - DB_HOST=db
       - DB_PORT=5432
       - DB_USER=postgres

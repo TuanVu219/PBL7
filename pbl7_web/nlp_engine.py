@@ -5,7 +5,8 @@ import time
 import re
 from scipy.stats import linregress
 from sklearn.preprocessing import MinMaxScaler
-from underthesea import word_tokenize, text_normalize, ner
+# 🟢 Đã thêm sent_tokenize vào import
+from underthesea import word_tokenize, text_normalize, ner, sent_tokenize 
 from tqdm import tqdm
 from sqlalchemy import create_engine, text
 import warnings
@@ -47,31 +48,37 @@ def load_stopwords(filepath):
 
 STOPWORDS = load_stopwords(STOPWORDS_FILE)
 
+# 🟢 Đã cập nhật PREFIX_REGEX để chém bỏ các từ "tuổi", "thứ", "cái", "chiếc" đứng trước tên
 PREFIX_REGEX = re.compile(
     r'^(ủy ban nhân dân|ubnd|công an|sở gd\&đt|bộ|sở|ban|ngành|'
     r'tỉnh|thành phố|tp\.?|quận|huyện|phường|xã|thị trấn|thôn|ấp|bản|'
-    r'đường|phố|đại lộ|cầu|sông|hồ|trường đại học|trường|trung tâm|viện|công ty|tập đoàn)\s+',
+    r'đường|phố|đại lộ|cầu|sông|hồ|trường đại học|trường|trung tâm|viện|công ty|tập đoàn|'
+    r'tuổi|thứ|cái|chiếc)\s+',
     re.IGNORECASE
 )
 
-def process_vietnamese_text(text, custom_stopwords):
-    if not isinstance(text, str): return ""
-    text = re.sub(r'([.,!?:;()\[\]{}])', r' \1 ', text)
-    text = text_normalize(text).lower()
-    text = re.sub(r'http\S+|www\S+|https\S+|\S+@\S+|@\S+|#\S+', '', text)
-    text = re.sub(r'\b\d+\w*\b', '', text)
-    text = re.sub(r'[^\w\s]', ' ', text).strip()
-    if not text: return ""
-    words = word_tokenize(text, format="text").split()
+def process_vietnamese_text(text_content, custom_stopwords):
+    if not isinstance(text_content, str): return ""
+    text_content = re.sub(r'([.,!?:;()\[\]{}])', r' \1 ', text_content)
+    text_content = text_normalize(text_content).lower()
+    text_content = re.sub(r'http\S+|www\S+|https\S+|\S+@\S+|@\S+|#\S+', '', text_content)
+    text_content = re.sub(r'\b\d+\w*\b', '', text_content)
+    text_content = re.sub(r'[^\w\s]', ' ', text_content).strip()
+    if not text_content: return ""
+    words = word_tokenize(text_content, format="text").split()
     return " ".join([w for w in words if w not in custom_stopwords and ("_" in w or len(w) > 3)])
 
 def extract_entities_by_ner(text_content):
     if not isinstance(text_content, str) or text_content.strip() == "": return []
     try:
         text_raw = text_content.replace('_', ' ')
-        sentences = text_raw.replace('\n', '.').split('.')
+        
+        # 🟢 VŨ KHÍ 1: Dùng sent_tokenize thay cho split('.') để giữ nguyên tên có dấu chấm (như St. Petersburg)
+        sentences = sent_tokenize(text_raw)
+        
         entities = set()
         
+        # 🟢 VŨ KHÍ 2: Bổ sung Blacklist các từ rác
         BLACK_LIST = {
             'dân_trí', 'báo', 'vnexpress', 'thanh_niên', 'tuổi_trẻ', 'vietnamnet', 'vtv',
             'chủ_tịch', 'tổng_thống', 'giám_đốc', 'lãnh_đạo', 'thủ_tướng', 'đại_sứ',
@@ -79,7 +86,7 @@ def extract_entities_by_ner(text_content):
             'người', 'tuổi', 'biển', 'công_nghiệp', 'hệ_thống', 'đối_thoại', 'trung_tâm',
             'trường', 'tỉnh', 'thành_phố', 'phường', 'xã', 'huyện', 'quận', 'công_an',
             'ngày', 'tháng', 'năm', 'nước', 'đường', 'phóng_viên', 'video', 'news', 'pccc&cnch',
-            'triệu_đồng', 'tỷ_đồng', 'nghìn_tỷ' 
+            'triệu_đồng', 'tỷ_đồng', 'nghìn_tỷ', 'st', 'vn' 
         }
 
         GENERIC_LOCATIONS = {
@@ -93,13 +100,15 @@ def extract_entities_by_ner(text_content):
         for sentence in sentences:
             sentence = sentence.strip()
             if len(sentence) < 10: continue
+            
             tagged = ner(sentence)
             current_entity = []
+            
             for word, pos, chunk, label in tagged:
                 clean_word = word.replace('_', ' ')
                 
-                # Bật thẻ MISC để bắt sự kiện
-                if label != 'O' and any(t in label for t in ['PER', 'LOC', 'ORG', 'MISC']):
+                # 🟢 VŨ KHÍ 3: Đã loại bỏ thẻ MISC để triệt tiêu các từ rác do gom cụm sai (chỉ giữ PER, LOC, ORG)
+                if label != 'O' and any(t in label for t in ['PER', 'LOC', 'ORG']):
                     if label.startswith('B-'):
                         if current_entity: entities.add(" ".join(current_entity))
                         if pos in ['Np', 'Ny', 'N']: current_entity = [clean_word]
@@ -115,14 +124,16 @@ def extract_entities_by_ner(text_content):
             old_ent = ""
             while old_ent != ent:
                 old_ent = ent
-                ent = PREFIX_REGEX.sub('', ent).strip()
+                ent = PREFIX_REGEX.sub('', ent).strip() # Cắt bỏ các tiền tố không mong muốn
+                
             ent_lower = ent.lower().replace(' ', '_')
             
-            # Chỉ lấy từ 2 âm tiết trở lên và không vướng Blacklist
+            # Lọc từ rác cuối cùng (đã thêm dấu '.' vào bộ lọc ký tự đặc biệt)
             if (len(ent_lower) >= 4 and '_' in ent_lower and not ent_lower.isnumeric() and 
-                not any(char in ent_lower for char in ['|', '-', ':', '/']) and 
+                not any(char in ent_lower for char in ['|', '-', ':', '/', '.']) and 
                 ent_lower not in BLACK_LIST and ent_lower not in GENERIC_LOCATIONS):
                 final_entities.append(ent_lower)
+                
         return final_entities
     except:
         return []
@@ -325,7 +336,8 @@ if __name__ == '__main__':
                 if not dup: saved.append(roots); filtered.append(row)
             return pd.DataFrame(filtered)
 
-        df_final = jaccard_filter(df_metrics).head(20)
+        # Đã cập nhật thành .head(40) theo yêu cầu của bạn
+        df_final = jaccard_filter(df_metrics).head(60)
         
         df_save = df_final[['Keyword', 'Popularity', 'Trend', 'Z_Score', 'SUPER_HOT_SCORE']].copy()
         df_save.columns = ['Keyword', 'Popularity', 'Trend', 'Z_Score', 'Super_Hot_Score']
@@ -337,7 +349,7 @@ if __name__ == '__main__':
         df_save.to_sql('trending_keywords', engine, if_exists='append', index=False)
         
         print("\n" + "="*80)
-        print(f"👑 BẢNG XẾP HẠNG TOP 20 SỰ KIỆN & THỰC THỂ NÓNG NHẤT NGÀY {target_date_str}:")
+        print(f"👑 BẢNG XẾP HẠNG TOP 40 SỰ KIỆN & THỰC THỂ NÓNG NHẤT NGÀY {target_date_str}:")
         print("-" * 80)
         display_cols = ['Keyword', 'Popularity', 'Trend', 'Z_Score', 'Super_Hot_Score']
         print(df_save[display_cols].round(3).to_string(index=False))
