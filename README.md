@@ -117,7 +117,7 @@ docker-compose --version
 # Bước 1: Clone Source Code
 
 ```bash
-[git clone https://github.com/<your-username>/<your-repository>.git](https://github.com/TuanVu219/PBL7.git)
+git clone https://github.com/TuanVu219/PBL7.git
 ```
 
 ---
