@@ -35,13 +35,15 @@ select option { background-color: #0f172a; color: #f8fafc; }
                 <select id="timeFilter" onchange="fetchAllData()" class="h-12 px-4 rounded-2xl bg-slate-900/80 border border-white/5 outline-none focus:border-indigo-500 text-sm transition cursor-pointer">
                     <option value="24h">🔥 24h qua</option>
                     <option value="48h">📈 48h qua</option>
+                    <option value="7d">📅 7 ngày qua</option>
+                    <option value="30d">🗓️ 30 ngày qua</option>
                 </select>
                 <select id="categoryFilter" onchange="fetchAllData()" class="h-12 px-4 rounded-2xl bg-slate-900/80 border border-white/5 outline-none focus:border-emerald-500 text-sm transition cursor-pointer text-emerald-100">
                     <option value="all">🌍 Tất cả chủ đề (AI LDA)</option>
-                    <option value="giáo dục đại học & nghiên cứu">🎓 Giáo dục Đại học & Nghiên cứu</option>
+                    <option value="chính trị & ngoại giao">🏛️Chính trị & Ngoại giao</option>
                     <option value="thể thao & bóng đá">⚽ Thể thao & Bóng đá</option>
-                    <option value="doanh nghiệp & phát triển xanh">🌱 Doanh nghiệp & Phát triển Xanh</option>
-                    <option value="tuyển sinh & giáo dục phổ thông">🏫 Tuyển sinh & Giáo dục phổ thông</option>
+                    <option value="doanh nghiệp & phát triển xanh">🌱 Doanh nghiệp</option>
+                    <option value="tuyển sinh & giáo dục phổ thông">🏫 Tuyển sinh & Giáo dục</option>
                     <option value="chính trị quốc tế & xung đột">⚔️ Chính trị Quốc tế & Xung đột</option>
                     <option value="văn hóa & sự kiện xã hội">🎭 Văn hóa & Sự kiện Xã hội</option>
                     <option value="y tế, sức khỏe & thực phẩm">🏥 Y tế, Sức khỏe & Thực phẩm</option>
@@ -86,9 +88,11 @@ select option { background-color: #0f172a; color: #f8fafc; }
         <main class="xl:col-span-9 space-y-6">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="glass rounded-3xl p-6 lg:col-span-2">
-                    <div class="mb-4">
-                        <h2 id="chart-title" class="text-3xl font-semibold">Select Trend</h2>
-                        <p id="chart-subtitle" class="text-slate-500">AI-powered analytics visualization</p>
+                    <div class="mb-4 flex justify-between items-start">
+                        <div>
+                            <h2 id="chart-title" class="text-3xl font-semibold">Select Trend</h2>
+                            <p id="chart-subtitle" class="text-slate-500">AI-powered analytics visualization</p>
+                        </div>
                     </div>
                     <div id="trendChart" class="w-full h-[380px]"></div>
                 </div>
@@ -111,7 +115,6 @@ select option { background-color: #0f172a; color: #f8fafc; }
 let globalKeywords = []; let globalTopics = [];
 let currentMode = 'keywords'; let currentChart = null; let wordCloudChart = null; let activeElement = null;
 
-// Khởi tạo Word Cloud
 function renderWordCloud(data) {
     const wcDom = document.getElementById('wordCloud');
     if (!wordCloudChart) wordCloudChart = echarts.init(wcDom);
@@ -142,7 +145,6 @@ function renderWordCloud(data) {
     wordCloudChart.setOption(option);
 }
 
-// Vẽ Sparkline mini siêu nhẹ bằng SVG
 function createSparkline(dataArray) {
     if(!dataArray || dataArray.length < 2) return '';
     const max = Math.max(...dataArray), min = Math.min(...dataArray);
@@ -179,13 +181,10 @@ async function fetchAllData(){
     document.getElementById('item-list').style.display = 'none';
     
     const timeFilter = document.getElementById('timeFilter').value;
-    
-    // 🟢 Lấy giá trị của bộ lọc Danh mục
     const categoryFilter = document.getElementById('categoryFilter') ? document.getElementById('categoryFilter').value : 'all';
 
     try {
         const [kwRes, topicRes] = await Promise.all([ 
-            // 🟢 Truyền thêm category vào URL
             fetch(`/api/trending/?time=${timeFilter}&category=${encodeURIComponent(categoryFilter)}`), 
             fetch('/api/topics/') 
         ]);
@@ -206,18 +205,20 @@ async function fetchAllData(){
     document.getElementById('skeleton-loader').style.display = 'none';
     document.getElementById('item-list').style.display = 'block';
 }
+
 function renderList(data){
     const container = document.getElementById('item-list');
     container.innerHTML = '';
-    const is48h = document.getElementById('timeFilter').value === '48h';
+    const timeVal = document.getElementById('timeFilter').value;
 
     data.forEach((item, index) => {
         const isKeyword = currentMode === 'keywords';
         const title = isKeyword ? item.keyword.replace(/_/g, ' ') : item.topic_name;
         const subtitle = isKeyword ? item.dominant_topic : item.trend_type;
-// Hiển thị trực tiếp điểm Hot Score thay vì Z-Score để đồng nhất với Backend
-        const badge = isKeyword ? (is48h ? `VOL ${item.super_hot_score}` : `HOT ${item.super_hot_score.toFixed(2)}`) : `ACC ${item.acceleration.toFixed(2)}`;        
-        // Trích xuất mảng data cho sparkline
+        
+        // 🟢 ĐÃ SỬA: Nếu không phải 24h thì hiện VOL (tổng bài báo)
+        const badge = isKeyword ? (timeVal !== '24h' ? `VOL ${item.super_hot_score}` : `HOT ${item.super_hot_score.toFixed(2)}`) : `ACC ${item.acceleration.toFixed(2)}`;        
+        
         let arrData = [];
         if(isKeyword && item.trend_data) arrData = item.trend_data.map(d=>d.count).slice(-7);
         else if(item.chart_data) arrData = item.chart_data.map(d=>d.percentage).slice(-7);
@@ -253,9 +254,7 @@ function selectItem(item){
     document.getElementById('chart-title').innerText = isKeyword ? item.keyword.replace(/_/g, ' ') : item.topic_name;
     document.getElementById('chart-subtitle').innerText = isKeyword ? `Topic: ${item.dominant_topic}` : item.trend_type;
     
-    // Mặc định gọi hàm hiển thị Full báo lúc mới chọn
     renderArticles(item.articles || []);
-    // Sau đó render chart (nếu click vào chart nó sẽ lọc tiếp)
     renderChart(item, isKeyword);
 }
 
@@ -267,26 +266,29 @@ function renderChart(item, isKeyword) {
     const rawData = item.chart_data || item.trend_data;
     if(!rawData || rawData.length === 0) return;
 
+    // 🟢 ĐÃ SỬA: Đọc giá trị timeFilter để biết cần lùi lại bao nhiêu ngày
+    const timeVal = document.getElementById('timeFilter').value;
+    let daysToShow = 7; // Mặc định 24h, 48h, 7d sẽ xem chart 7 ngày cho có ngữ cảnh
+    if (timeVal === '30d') daysToShow = 30; // Nếu chọn 30 ngày thì nới trục X ra 30
+
     const xData = [];
     const yData = [];
-    // Mảng song song chứa YYYY-MM-DD để dùng làm key lúc click
     const fullDateKeys = []; 
     
-    // Lấy mốc thời gian là ngày mới nhất trong chuỗi dữ liệu
     const latestDate = new Date(rawData[rawData.length - 1].date);
     
-    // Lùi lại 7 ngày để tạo khung thời gian chuẩn
-    for (let i = 6; i >= 0; i--) {
+    // 🟢 ĐÃ SỬA: Vòng lặp lấy số ngày động (Dynamic days)
+    for (let i = daysToShow - 1; i >= 0; i--) {
         const d = new Date(latestDate);
         d.setDate(d.getDate() - i);
         
         const year = d.getFullYear();
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const day = String(d.getDate()).padStart(2, '0');
-        const dateStr = `${year}-${month}-${day}`; // Chuẩn Database YYYY-MM-DD
+        const dateStr = `${year}-${month}-${day}`; 
         
-        xData.push(`${month}/${day}`); // Trục X hiển thị MM/DD cho đẹp
-        fullDateKeys.push(dateStr);    // Cất format YYYY-MM-DD đi để dành
+        xData.push(`${month}/${day}`);
+        fullDateKeys.push(dateStr);    
         
         const found = rawData.find(r => r.date === dateStr);
         yData.push(found ? (isKeyword ? found.count : found.percentage) : 0);
@@ -295,6 +297,7 @@ function renderChart(item, isKeyword) {
     currentChart.setOption({
         tooltip: { trigger: 'axis', backgroundColor: '#0f172a', textStyle: { color: '#fff' } },
         grid: { top: 20, left: 40, right: 20, bottom: 30 },
+        // Thêm minInterval: 1 để tự động giấu bớt lable trục X nếu chọn 30 ngày (tránh chữ đè lên nhau)
         xAxis: { type: 'category', data: xData, axisLabel: { color: '#64748b' } },
         yAxis: { type: 'value', splitLine: { lineStyle: { color: 'rgba(255,255,255,.05)' } }, axisLabel: { color: '#64748b' } },
         series: [{
@@ -304,29 +307,20 @@ function renderChart(item, isKeyword) {
         }]
     });
 
-    // Bắt sự kiện Click vào biểu đồ để lọc báo
     currentChart.on('click', function(params) {
-        // Lấy đúng format YYYY-MM-DD từ mảng bí mật fullDateKeys thông qua dataIndex
         const exactClickedDate = fullDateKeys[params.dataIndex]; 
-        
         const filteredArticles = (item.articles || []).filter(article => {
             if (!article.published_at) return false;
-            // Ở Backend view.py đã format published_at là 'YYYY-MM-DD HH:MM' rồi
-            // Ta chỉ cần cắt chuỗi trước dấu cách để lấy 'YYYY-MM-DD'
             const articleDate = article.published_at.split(' ')[0];
             return articleDate === exactClickedDate;
         });
-        
-        // Render lại danh sách báo đã lọc
         renderArticles(filteredArticles, exactClickedDate);
     });
 }
 
-// Bổ sung tham số filterDate để đổi tiêu đề cho ngầu
 function renderArticles(articles, filterDate = null){
     const container = document.getElementById('articles');
     
-    // Nếu có lọc theo ngày thì ghi "Báo ngày ...", không thì ghi "Tất cả"
     let titleText = `(${articles.length})`;
     if (filterDate) {
         const [y, m, d] = filterDate.split('-');
@@ -350,12 +344,10 @@ function renderArticles(articles, filterDate = null){
     });
 }
 
-// Chuyển hướng trang Search khi enter
 document.getElementById('searchInput').addEventListener('keypress', e => {
     if (e.key === 'Enter' && e.target.value.trim()) window.location.href = `/search/?q=${encodeURIComponent(e.target.value.trim())}`;
 });
 
-// Hàm Export CSV
 function exportCSV() {
     const data = currentMode === 'keywords' ? globalKeywords : globalTopics;
     if(!data.length) return alert("Không có dữ liệu để xuất!");
@@ -375,7 +367,7 @@ function exportCSV() {
 
 // Khởi chạy khi load
 fetchAllData(); 
-setInterval(fetchAllData, 60000); // Tự làm mới sau 60s
+// setInterval(fetchAllData, 60000); 
 </script>
 </body>
 </html>

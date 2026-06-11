@@ -27,7 +27,8 @@ def get_trending(request):
                         'công_an_tỉnh','văn_hóa_thể_thao','triệu_đồng','triệu_lượt','thủ_tục_hành_chính','năm_2026','năm_2025',
                         'sức_khỏe','nam_bộ','tháng_5','tháng_6','giờ_việt_nam','miền_bắc',
                         'công_thương','khánh_hòa','ninh_bình ','hải_phòng','nghệ_an','bắc_ninh','cần_thơ','thanh_hóa','tây_ninh','năm_2030','quảng_ngãi','quảng_trị','ninh_bình','hóa_chất_6','diễn_đàn_kinh_tế_quốc_tế_st','vinh_danh_top',
-                        'tiếng_anh','môn_toán','and_the_beast','đắk_lắk','đồng_tháp'
+                        'tiếng_anh','môn_toán','and_the_beast','đắk_lắk','đồng_tháp','trung_quốc','thái_lan','hàn_quốc','nhật_bản','cà_mau','cao_bằng','sắt_thủ_thiêm','năng_lực_đợt_2','gia_lai','năm_2024','ấn_độ','tây_ban_nha','số_1','phú_quốc','sơn_la',
+                        'chí_minh','sóc_trăng','quảng_ninh','phía_nam_giải','chủ_chành','long_biên','mv_come','miền_tây','huỳnh_hiểu','điện_3'
                         ]
     
     try:

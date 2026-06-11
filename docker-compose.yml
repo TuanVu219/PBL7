@@ -69,7 +69,7 @@ services:
       - ./Spark/app:/app
 
   # ==========================================
-  # 4. WEB APP (DJANGO)
+  # 4. WEB APP (DJANGO API)
   # ==========================================
   web:
     build: 
@@ -82,6 +82,27 @@ services:
       - .:/app
     ports:
       - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=123456
+      - DB_NAME=postgres
+
+  # ==========================================
+  # 5. SCHEDULER (AUTO PIPELINE BACKGROUND WORKER)
+  # ==========================================
+  scheduler:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: pbl7_scheduler
+    working_dir: /app/pbl7_web
+    command: python manage.py auto_pipeline
+    volumes:
+      - .:/app
     depends_on:
       - db
     environment:

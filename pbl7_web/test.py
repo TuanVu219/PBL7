@@ -5,7 +5,6 @@ import time
 import re
 from scipy.stats import linregress
 from sklearn.preprocessing import MinMaxScaler
-# 🟢 Đã thêm sent_tokenize vào import
 from underthesea import word_tokenize, text_normalize, ner, sent_tokenize 
 from tqdm import tqdm
 from sqlalchemy import create_engine, text
@@ -48,7 +47,6 @@ def load_stopwords(filepath):
 
 STOPWORDS = load_stopwords(STOPWORDS_FILE)
 
-# 🟢 Đã cập nhật PREFIX_REGEX để chém bỏ các từ "tuổi", "thứ", "cái", "chiếc" đứng trước tên
 PREFIX_REGEX = re.compile(
     r'^(ủy ban nhân dân|ubnd|công an|sở gd\&đt|bộ|sở|ban|ngành|'
     r'tỉnh|thành phố|tp\.?|quận|huyện|phường|xã|thị trấn|thôn|ấp|bản|'
@@ -72,13 +70,9 @@ def extract_entities_by_ner(text_content):
     if not isinstance(text_content, str) or text_content.strip() == "": return []
     try:
         text_raw = text_content.replace('_', ' ')
-        
-        # 🟢 VŨ KHÍ 1: Dùng sent_tokenize thay cho split('.') để giữ nguyên tên có dấu chấm (như St. Petersburg)
         sentences = sent_tokenize(text_raw)
-        
         entities = set()
         
-        # 🟢 VŨ KHÍ 2: Bổ sung Blacklist các từ rác
         BLACK_LIST = {
             'dân_trí', 'báo', 'vnexpress', 'thanh_niên', 'tuổi_trẻ', 'vietnamnet', 'vtv',
             'chủ_tịch', 'tổng_thống', 'giám_đốc', 'lãnh_đạo', 'thủ_tướng', 'đại_sứ',
@@ -86,14 +80,15 @@ def extract_entities_by_ner(text_content):
             'người', 'tuổi', 'biển', 'công_nghiệp', 'hệ_thống', 'đối_thoại', 'trung_tâm',
             'trường', 'tỉnh', 'thành_phố', 'phường', 'xã', 'huyện', 'quận', 'công_an',
             'ngày', 'tháng', 'năm', 'nước', 'đường', 'phóng_viên', 'video', 'news', 'pccc&cnch',
-            'triệu_đồng', 'tỷ_đồng', 'nghìn_tỷ', 'st', 'vn','lần_thứ_ii '
+            'triệu_đồng', 'tỷ_đồng', 'nghìn_tỷ', 'st', 'vn' 
         }
 
         GENERIC_LOCATIONS = {
             'việt_nam', 'hà_nội', 'tp_hcm', 'tphcm', 'hồ_chí_minh', 'đà_nẵng', 'quốc_gia', 'thế_giới',
-            'tây_ninh',' bắc_ninh','lào_cai','đắk_lắk','khánh_hòa'
-            'châu_á', 'châu_âu', 'châu_phi', 'châu_mỹ', 'đông_nam_á', 
-            'an_giang', 'phú_thọ', 'lâm_đồng', 'bình_dương', 'đồng_nai', 'long_an',
+            'trung_quốc', 'mỹ', 'nga', 'pháp', 'anh', 'đức', 'nhật_bản', 'hàn_quốc', 'thái_lan', 'campuchia',
+            'ukraine', 'iran', 'israel', 'palestine', 'syria', 'indonesia', 'malaysia', 'philippines',
+            'châu_á', 'châu_âu', 'châu_phi', 'châu_mỹ', 'đông_nam_á', 'biển_đông',
+            'an_giang', 'phú_thọ', 'lâm_đồng', 'bình_dương', 'đồng_nai', 'long_an'
         }
 
         for sentence in sentences:
@@ -105,8 +100,6 @@ def extract_entities_by_ner(text_content):
             
             for word, pos, chunk, label in tagged:
                 clean_word = word.replace('_', ' ')
-                
-                # 🟢 VŨ KHÍ 3: Đã loại bỏ thẻ MISC để triệt tiêu các từ rác do gom cụm sai (chỉ giữ PER, LOC, ORG)
                 if label != 'O' and any(t in label for t in ['PER', 'LOC', 'ORG']):
                     if label.startswith('B-'):
                         if current_entity: entities.add(" ".join(current_entity))
@@ -123,11 +116,15 @@ def extract_entities_by_ner(text_content):
             old_ent = ""
             while old_ent != ent:
                 old_ent = ent
-                ent = PREFIX_REGEX.sub('', ent).strip() # Cắt bỏ các tiền tố không mong muốn
+                ent = PREFIX_REGEX.sub('', ent).strip() 
                 
             ent_lower = ent.lower().replace(' ', '_')
             
-            # Lọc từ rác cuối cùng (đã thêm dấu '.' vào bộ lọc ký tự đặc biệt)
+            if re.search(r'(năm_\d{4}|tháng_\d{1,2}|ngày_\d{1,2}|quý_\d|thế_kỷ)', ent_lower): continue
+            if re.search(r'(giờ_việt_nam|sáng_nay|chiều_nay|tối_nay|hiện_nay)', ent_lower): continue
+            if re.search(r'(miền_bắc|miền_trung|miền_nam|tây_bắc|đông_bắc|đồng_bằng)', ent_lower): continue
+            if re.search(r'(lớp_\d{1,2})', ent_lower): continue
+            
             if (len(ent_lower) >= 4 and '_' in ent_lower and not ent_lower.isnumeric() and 
                 not any(char in ent_lower for char in ['|', '-', ':', '/', '.']) and 
                 ent_lower not in BLACK_LIST and ent_lower not in GENERIC_LOCATIONS):
@@ -138,15 +135,14 @@ def extract_entities_by_ner(text_content):
         return []
 
 # =========================================================
-# 🌟 BƯỚC 2: MAIN PIPELINE (CHẠY INCREMENTAL HÀNG NGÀY)
+# 🌟 BƯỚC 2: MAIN PIPELINE (CHẾ ĐỘ TEST - KHÔNG GHI DATABASE)
 # =========================================================
 if __name__ == '__main__':
-    print("🚀 BƯỚC 2: PHÂN TÍCH TRENDING BÀI BÁO MỚI HÀNG NGÀY")
+    print("🚀 BƯỚC 2: PHÂN TÍCH TRENDING BÀI BÁO (CHẾ ĐỘ TEST / DRY-RUN)")
     print("=" * 80)
     start_time_total = time.time()
 
-    # 1. LOAD CÁC BÀI BÁO PENDING TỪ DATABASE
-    print("\n⏳ Đang tải các bài báo MỚI (PENDING) để xử lý...")
+    print("\n⏳ Đang tải các bài báo MỚI (PENDING) để xử lý thử...")
     query = """
         SELECT id, title, content, published_at, tags 
         FROM raw_articles 
@@ -160,43 +156,30 @@ if __name__ == '__main__':
         print("✅ Không có bài báo PENDING nào để phân tích! Hệ thống nghỉ ngơi.")
         exit()
 
-    # =========================================================
-    # 🔥 THÊM MỚI: MÀNG LỌC BÁO TRÙNG LẶP
-    # =========================================================
-    print("⏳ Kiểm tra và loại bỏ các bài báo trùng lặp...")
-    # Gom các bài trùng Tiêu đề hoặc Nội dung
+    print("⏳ Kiểm tra và loại bỏ các bài báo trùng lặp (Chỉ lọc trên RAM)...")
     duplicate_mask = df.duplicated(subset=['title'], keep='first') | df.duplicated(subset=['content'], keep='first')
     df_duplicates = df[duplicate_mask]
-    df = df[~duplicate_mask] # Chỉ giữ lại các bài duy nhất
+    df = df[~duplicate_mask] 
 
     if not df_duplicates.empty:
-        dup_ids = tuple(df_duplicates['id'].tolist())
-        print(f"♻️ Phát hiện {len(dup_ids)} bài báo bị trùng lặp. Đang xóa sổ và khóa status...")
-        with engine.connect() as conn:
-            if len(dup_ids) == 1:
-                conn.execute(text("UPDATE raw_articles SET status = 'DUPLICATE' WHERE id = :pid"), {"pid": dup_ids[0]})
-            else:
-                conn.execute(text("UPDATE raw_articles SET status = 'DUPLICATE' WHERE id IN :pids"), {"pids": dup_ids})
-            conn.commit()
+        print(f"♻️ Phát hiện {len(df_duplicates)} bài báo trùng lặp. [TEST MODE: Đã bỏ qua, không ghi status DUPLICATE vào DB]")
 
     if df.empty:
-        print("✅ Sau khi lọc trùng, không còn bài báo PENDING nào để phân tích! Hệ thống nghỉ ngơi.")
+        print("✅ Sau khi lọc trùng trên RAM, không còn bài báo nào. Hệ thống nghỉ ngơi.")
         exit()
-    # =========================================================
 
     df['published_at'] = pd.to_datetime(df['published_at'])
     df['date'] = df['published_at'].dt.date
     target_date = df['date'].max()
 
-    print(f"✅ Đã tải {len(df)} bài báo mới KHÔNG TRÙNG LẶP. Phân tích cho mốc thời gian: {target_date.strftime('%Y-%m-%d')}")
-    
+    print(f"✅ Đã tải {len(df)} bài báo mới KHÔNG TRÙNG LẶP. Phân tích thử cho mốc: {target_date.strftime('%Y-%m-%d')}")
     df['raw_full_text_ner'] = df['title'].astype(str) + ". " + df['content'].astype(str)
     
     # ---------------------------------------------------------
     # 2. PHÂN TÍCH CHỦ ĐỀ VĨ MÔ (LDA)
     # ---------------------------------------------------------
     print("\n" + "="*80)
-    print("⏳ Đang phân tích chủ đề bài viết bằng LDA...")
+    print("⏳ Đang phân tích chủ đề bài viết bằng LDA (Không lưu DB)...")
     
     tqdm.pandas(desc="🧠 Làm sạch Text cho LDA")
     df['clean_text_lda'] = df['title'].progress_apply(lambda x: process_vietnamese_text(x, STOPWORDS)) + " " + df['content'].progress_apply(lambda x: process_vietnamese_text(x, STOPWORDS))
@@ -219,29 +202,8 @@ if __name__ == '__main__':
     tqdm.pandas(desc="🧠 Gắn nhãn LDA")
     df['topic_id'] = df['clean_text_lda'].progress_apply(assign_topic)
     
-    # Lưu Topic Map của các bài mới
-    df[['id', 'topic_id']].rename(columns={'id': 'article_id'}).to_sql('article_topic_map', engine, if_exists='append', index=False)
-
-    print("⏳ Cập nhật gia tốc LDA Chủ đề...")
-    df_all_topics = pd.read_sql("SELECT ra.published_at, atm.topic_id FROM article_topic_map atm JOIN raw_articles ra ON atm.article_id = ra.id", engine)
-    df_all_topics['date'] = pd.to_datetime(df_all_topics['published_at']).dt.date
-    trend_data = df_all_topics.groupby(['date', 'topic_id']).size().reset_index(name='article_count')
-    total_per_day = trend_data.groupby('date')['article_count'].transform('sum')
-    trend_data['percentage'] = (trend_data['article_count'] / total_per_day) * 100
-    
-    with engine.connect() as conn:
-        conn.execute(text("TRUNCATE TABLE topic_daily_stats CASCADE"))
-        conn.commit()
-    trend_data.rename(columns={'date': 'Date'}).to_sql('topic_daily_stats', engine, if_exists='append', index=False)
-
-    topic_records = []
-    for t_id in range(1, 12):
-        t_data = trend_data[trend_data['topic_id'] == t_id].sort_values('date')
-        slope = linregress(np.arange(len(t_data)), t_data['percentage'].values)[0] if len(t_data) > 1 else 0.0
-        trend_type = "🔥 Đang bùng nổ" if slope > 0.5 else ("❄️ Đang hạ nhiệt" if slope < -0.5 else "⚖️ Đi ngang")
-        topic_records.append({'topic_id': t_id, 'topic_name': TOPIC_LABELS.get(t_id), 'acceleration': float(slope), 'trend_type': trend_type})
-    pd.DataFrame(topic_records).to_sql('lda_topics', engine, if_exists='replace', index=False)
-
+    # [TEST MODE] Tắt lưu article_topic_map
+    print("✅ [TEST MODE] Đã phân tích xong LDA. Bỏ qua ghi bảng article_topic_map, topic_daily_stats và lda_topics.")
 
     # ---------------------------------------------------------
     # 3. BÓC TÁCH THỰC THỂ NER CHO CÁC BÀI BÁO MỚI
@@ -253,7 +215,6 @@ if __name__ == '__main__':
     df['extracted_entities'] = df['raw_full_text_ner'].progress_apply(extract_entities_by_ner)
     df_valid_ner = df[df['extracted_entities'].map(len) > 0]
 
-    # 🔥 IN RA MÀN HÌNH CONSOLE KIỂM TRA NHỮNG TỪ AI VỪA BẮT
     if not df_valid_ner.empty:
         all_entities = [ent for sublist in df_valid_ner['extracted_entities'] for ent in sublist]
         from collections import Counter
@@ -266,31 +227,27 @@ if __name__ == '__main__':
         print(f"   {preview_text}")
         print("="*80 + "\n")
 
-        print("⏳ Đẩy từ khóa của bài mới vào Database (ner_article_keyword_map)...")
         df_exploded = df_valid_ner[['id', 'extracted_entities']].explode('extracted_entities')
         df_exploded.columns = ['article_id', 'keyword']
-        df_exploded.to_sql('ner_article_keyword_map', engine, if_exists='append', index=False)
+        
+        # [TEST MODE] Tắt lưu ner_article_keyword_map và update DB
+        print("✅ [TEST MODE] Bỏ qua ghi bảng ner_article_keyword_map và ner_keyword_daily_stats vào Database.")
 
-    # Chỉ tính và chèn thêm tần suất xuất hiện cho cái target_date hiện tại vào bảng chung
+    # ---------------------------------------------------------
+    # 4. CHẤM ĐIỂM Z-SCORE (GIẢ LẬP DỮ LIỆU TRÊN RAM)
+    # ---------------------------------------------------------
     target_date_str = target_date.strftime('%Y-%m-%d')
-    print("⏳ Cập nhật bảng tần suất chung (ner_keyword_daily_stats)...")
-    with engine.connect() as conn:
-        conn.execute(text(f"DELETE FROM ner_keyword_daily_stats WHERE date = '{target_date_str}'"))
-        conn.execute(text(f"""
-            INSERT INTO ner_keyword_daily_stats (date, keyword, count)
-            SELECT DATE(ra.published_at), akm.keyword, COUNT(akm.article_id)
-            FROM ner_article_keyword_map akm JOIN raw_articles ra ON akm.article_id = ra.id
-            WHERE DATE(ra.published_at) = '{target_date_str}'
-            GROUP BY DATE(ra.published_at), akm.keyword
-        """))
-        conn.commit()
-
-
-    # ---------------------------------------------------------
-    # 4. CHẤM ĐIỂM Z-SCORE BẰNG CÁCH SO SÁNH VỚI QUÁ KHỨ VÀ LƯU TOP
-    # ---------------------------------------------------------
-    print("\n⏳ Đang tải toàn bộ dữ liệu lịch sử để chấm điểm Z-Score...")
-    df_daily_ner = pd.read_sql("SELECT * FROM ner_keyword_daily_stats", engine)
+    print("\n⏳ Đang tải lịch sử cũ & Giả lập dữ liệu hôm nay trên RAM để chấm điểm Z-Score...")
+    
+    # 1. Tính toán thống kê hôm nay ngay trên RAM bằng Pandas
+    today_stats = df_exploded.groupby('keyword').size().reset_index(name='count')
+    today_stats['date'] = target_date 
+    
+    # 2. Tải dữ liệu lịch sử từ DB (Loại bỏ hôm nay để phòng ngừa trùng lặp nếu lỡ có)
+    df_history_ner = pd.read_sql(f"SELECT * FROM ner_keyword_daily_stats WHERE date < '{target_date_str}'", engine)
+    
+    # 3. Nối lịch sử với hiện tại
+    df_daily_ner = pd.concat([df_history_ner, today_stats], ignore_index=True)
     
     df_pivot = df_daily_ner.pivot(index='date', columns='keyword', values='count').fillna(0).sort_index()
     keyword_metrics = []
@@ -302,7 +259,6 @@ if __name__ == '__main__':
 
     for kw in df_pivot.columns:
         counts = df_pivot[kw].values
-        # Chỉ xét những từ có xuất hiện vào ngày hôm nay và xuất hiện >= 2 lần
         if len(counts) > 1 and counts[-1] >= 2:
             spec_weight = 2.0 if any(f"_{kw}_" in f"_{tag}_" or kw == tag for tag in dynamic_tags) else 1.0
             slope = linregress(np.arange(len(counts)), counts)[0]
@@ -335,20 +291,17 @@ if __name__ == '__main__':
                 if not dup: saved.append(roots); filtered.append(row)
             return pd.DataFrame(filtered)
 
-        # Đã cập nhật thành .head(40) theo yêu cầu của bạn
         df_final = jaccard_filter(df_metrics).head(60)
         
         df_save = df_final[['Keyword', 'Popularity', 'Trend', 'Z_Score', 'SUPER_HOT_SCORE']].copy()
         df_save.columns = ['Keyword', 'Popularity', 'Trend', 'Z_Score', 'Super_Hot_Score']
         df_save['date'] = target_date_str
         
-        with engine.connect() as conn:
-            conn.execute(text("DELETE FROM trending_keywords WHERE date = :d"), {"d": target_date_str})
-            conn.commit()
-        df_save.to_sql('trending_keywords', engine, if_exists='append', index=False)
+        # [TEST MODE] Tắt xóa/ghi bảng trending_keywords
+        print("✅ [TEST MODE] Đã giả lập chấm điểm xong. Bỏ qua ghi đè bảng trending_keywords.")
         
         print("\n" + "="*80)
-        print(f"👑 BẢNG XẾP HẠNG TOP 40 SỰ KIỆN & THỰC THỂ NÓNG NHẤT NGÀY {target_date_str}:")
+        print(f"👑 BẢNG XẾP HẠNG TOP 60 SỰ KIỆN & THỰC THỂ NÓNG NHẤT NGÀY {target_date_str} (BẢN TEST):")
         print("-" * 80)
         display_cols = ['Keyword', 'Popularity', 'Trend', 'Z_Score', 'Super_Hot_Score']
         print(df_save[display_cols].round(3).to_string(index=False))
@@ -356,16 +309,8 @@ if __name__ == '__main__':
     # ---------------------------------------------------------
     # 5. KHÓA SỔ CÁC BÀI BÁO PENDING THÀNH PROCESSED
     # ---------------------------------------------------------
-    print("\n⏳ Đóng dấu PROCESSED cho các bài báo vừa xử lý...")
-    processed_ids = tuple(df['id'].tolist())
-    with engine.connect() as conn:
-        if len(processed_ids) == 1: 
-            conn.execute(text("UPDATE raw_articles SET status = 'PROCESSED' WHERE id = :pid"), {"pid": processed_ids[0]})
-        else: 
-            conn.execute(text("UPDATE raw_articles SET status = 'PROCESSED' WHERE id IN :pids"), {"pids": processed_ids})
-        conn.commit()
+    print("\n⏳ [TEST MODE] Bỏ qua bước update status bài báo thành PROCESSED. (Bài báo vẫn là PENDING)")
 
     print("\n" + "=" * 80)
-    print(f"🎉 HOÀN TẤT XỬ LÝ NGÀY MỚI NHẤT ({target_date_str})!")
-    print(f"⏱️ Tổng thời gian chạy: {round(time.time() - start_time_total, 2)} giây.")
+    print(f"🎉 HOÀN TẤT CHẠY TEST SAU {round(time.time() - start_time_total, 2)} GIÂY!")
     print("=" * 80)
