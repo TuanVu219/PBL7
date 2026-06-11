@@ -55,22 +55,6 @@ Các thư viện AI/NLP chính:
 
 ---
 
-## 3️⃣ Presentation Layer (Static Frontend)
-
-Frontend được xây dựng bằng:
-
-* HTML5
-* TailwindCSS
-* Apache ECharts
-
-Đặc điểm:
-
-* Giao diện tĩnh hoàn toàn
-* Không cần server-side rendering
-* Tốc độ tải nhanh
-* Gọi API trực tiếp từ Backend
-
----
 
 # 🛠️ Tech Stack
 
